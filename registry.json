@@ -342,6 +342,18 @@
       "contributor_url": "https://github.com/voidfreud"
     },
     {
+      "name": "rms",
+      "display_name": "Teltonika RMS",
+      "version": "1.0.0",
+      "description": "Device management and monitoring via Teltonika RMS REST API",
+      "requires": "RMS_API_TOKEN",
+      "homepage": "https://rms.teltonika-networks.com",
+      "install_cmd": "pip install git+https://github.com/HKUDS/CLI-Anything.git#subdirectory=rms/agent-harness",
+      "entry_point": "cli-anything-rms",
+      "skill_md": "rms/agent-harness/cli_anything/rms/skills/SKILL.md",
+      "category": "network",
+      "contributor": "galke",
+      "contributor_url": "https://github.com/galke7"
       "name": "renderdoc",
       "display_name": "RenderDoc",
       "version": "0.1.0",

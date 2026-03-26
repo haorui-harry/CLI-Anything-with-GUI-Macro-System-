@@ -57,6 +57,7 @@
 !/krita/
 !/freecad/
 !/iterm2/
+!/rms/
 !/renderdoc/
 
 # Step 5: Inside each software dir, ignore everything (including dotfiles)
@@ -104,6 +105,8 @@
 /freecad/.*
 /iterm2/*
 /iterm2/.*
+/rms/*
+/rms/.*
 /renderdoc/*
 /renderdoc/.*
 
@@ -131,6 +134,7 @@
 !/krita/agent-harness/
 !/freecad/agent-harness/
 !/iterm2/agent-harness/
+!/rms/agent-harness/
 !/renderdoc/agent-harness/
 
 # Step 7: Ignore build artifacts within allowed dirs
