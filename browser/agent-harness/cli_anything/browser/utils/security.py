@@ -23,9 +23,14 @@ _BLOCK_PRIVATE_NETWORKS = os.environ.get("CLI_ANYTHING_BROWSER_BLOCK_PRIVATE", "
 
 # Environment variable to define allowed URL schemes (comma-separated)
 # Default: "http,https"
+# Normalized to lowercase and empty entries filtered
 _ALLOWED_SCHEMES = set(
-    s.strip()
-    for s in os.environ.get("CLI_ANYTHING_BROWSER_ALLOWED_SCHEMES", "http,https").split(",")
+    scheme
+    for scheme in (
+        s.strip().lower()
+        for s in os.environ.get("CLI_ANYTHING_BROWSER_ALLOWED_SCHEMES", "http,https").split(",")
+    )
+    if scheme
 )
 
 # Dangerous URI schemes that should NEVER be allowed
@@ -57,12 +62,13 @@ _PRIVATE_NETWORK_PATTERNS = [
     r'^192\.168\.\d+\.\d+',       # 192.168.0.0/16 (private Class C)
     r'^169\.254\.\d+\.\d+',       # 169.254.0.0/16 (link-local)
     r'^fc00:',                    # IPv6 unique local (ULA)
-    r'^fd',                       # IPv6 unique local (ULA) prefix
+    r'^fd[0-9a-f]{2}:',           # IPv6 unique local (ULA) prefix - fixed to require hex + colon
     r'^fe80:',                    # IPv6 link-local
     r'^::',                       # IPv6 unspecified/loopback variants
     r'^\[::1\]',                  # IPv6 loopback with brackets
     r'^\[::\]',                   # IPv6 unspecified with brackets
     r'^\[fe80:',                  # IPv6 link-local with brackets
+    r'^\[fd[0-9a-f]{2}:',         # IPv6 unique local (ULA) prefix with brackets
 ]
 
 # Suspicious patterns that may indicate prompt injection attempts
@@ -127,16 +133,21 @@ def validate_url(url: str) -> tuple[bool, str]:
     if scheme in _BLOCKED_SCHEMES:
         return False, f"Blocked URL scheme: {scheme}"
 
+    # Require an explicit scheme (http or https)
+    if not scheme:
+        return False, f"URL must include an explicit scheme. Allowed: {', '.join(sorted(_ALLOWED_SCHEMES))}"
+
     # Check for allowed schemes
-    if scheme and scheme not in _ALLOWED_SCHEMES:
+    if scheme not in _ALLOWED_SCHEMES:
         return False, f"Unsupported URL scheme: {scheme}. Allowed: {', '.join(sorted(_ALLOWED_SCHEMES))}"
+
+    # Require a hostname for http/https URLs
+    hostname = parsed.hostname or ""
+    if not hostname:
+        return False, "URL must include a hostname"
 
     # Block private networks if enabled
     if _BLOCK_PRIVATE_NETWORKS:
-        hostname = parsed.hostname or ""
-        if not hostname:
-            # URLs without hostname (like weird schemes) are suspicious
-            return False, "URL has no hostname"
 
         hostname_lower = hostname.lower()
 
