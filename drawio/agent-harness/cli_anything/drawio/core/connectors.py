@@ -14,7 +14,7 @@ def list_connectors(session: Session, diagram_index: int = 0) -> list[dict]:
 
 def add_connector(session: Session, source_id: str, target_id: str,
                   edge_style: str = "orthogonal", label: str = "",
-                  diagram_index: int = 0) -> dict:
+                  diagram_index: int = 0, edge_id: str = None) -> dict:
     """Add a connector between two shapes.
 
     Args:
@@ -24,6 +24,7 @@ def add_connector(session: Session, source_id: str, target_id: str,
         edge_style: Edge style preset (straight, orthogonal, curved,
                     entity-relation) or raw style string.
         label: Optional label on the edge.
+        edge_id: Optional custom ID. Auto-generated if not provided.
 
     Returns:
         Dict with action and new edge info.
@@ -40,7 +41,7 @@ def add_connector(session: Session, source_id: str, target_id: str,
     session.checkpoint()
     edge_id = drawio_xml.add_edge(
         session.root, source_id, target_id, edge_style, label,
-        diagram_index=diagram_index,
+        diagram_index=diagram_index, edge_id=edge_id,
     )
 
     return {
