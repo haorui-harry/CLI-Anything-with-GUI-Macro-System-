@@ -18,7 +18,8 @@ class TestProjectManagement:
         )
 
         assert result["status"] == "created"
-        assert "test_project.json" in result["project_path"]
+        assert result["project_path"].endswith("project.json")
+        assert "test_project" in result["project_path"]
 
         # Verify file contents
         with open(result["project_path"]) as f:
