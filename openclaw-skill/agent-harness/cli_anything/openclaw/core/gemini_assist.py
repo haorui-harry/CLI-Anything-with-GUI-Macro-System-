@@ -38,7 +38,7 @@ Usage:
 
 from __future__ import annotations
 
-import base64
+
 import json
 import os
 from pathlib import Path
@@ -122,10 +122,6 @@ def _take_screenshot() -> bytes:
 def _load_image_bytes(path: str) -> bytes:
     with open(path, "rb") as f:
         return f.read()
-
-
-def _image_to_base64(data: bytes) -> str:
-    return base64.b64encode(data).decode("utf-8")
 
 
 # ── Step validation ───────────────────────────────────────────────────────────
