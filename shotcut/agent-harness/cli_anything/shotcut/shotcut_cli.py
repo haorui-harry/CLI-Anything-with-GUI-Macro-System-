@@ -17,6 +17,7 @@ Usage:
 import sys
 import os
 import json
+import shlex
 import click
 from typing import Optional
 
@@ -114,7 +115,6 @@ def handle_error(func):
 
 
 _repl_mode = False
-_auto_save = False
 _dry_run = False
 
 
@@ -126,25 +126,19 @@ _dry_run = False
 @click.option("--json", "json_mode", is_flag=True, help="Output in JSON format")
 @click.option("--session", "session_id", default=None, help="Session ID to use/resume")
 @click.option("--project", "project_path", default=None, help="Open a project file")
-@click.option("-s", "--save", "auto_save", is_flag=True,
-              help="Auto-save project after each mutation command (one-shot mode)")
 @click.option("--dry-run", "dry_run", is_flag=True, default=False,
               help="Run command without saving changes to disk")
 @click.pass_context
-def cli(ctx, json_mode, session_id, project_path, auto_save, dry_run):
+def cli(ctx, json_mode, session_id, project_path, dry_run):
     """Shotcut CLI — Video editing from the command line.
 
     A stateful CLI for manipulating Shotcut/MLT video projects.
     Designed for AI agents and power users.
 
     Run without a subcommand to enter interactive REPL mode.
-
-    Use -s/--save to automatically save changes after each mutation command.
-    This is useful in one-shot mode where each command runs in a new process.
     """
-    global _json_output, _session, _auto_save, _dry_run
+    global _json_output, _session, _dry_run
     _json_output = json_mode
-    _auto_save = auto_save
     _dry_run = dry_run
 
     if session_id:
@@ -164,15 +158,15 @@ def cli(ctx, json_mode, session_id, project_path, auto_save, dry_run):
 
 def _auto_save_callback():
     """Auto-save callback that runs after each command."""
-    global _auto_save, _session, _dry_run
+    global _session, _dry_run
     if _dry_run:
         return
-    if _auto_save and _session and _session.is_open and _session.is_modified:
-        # Don't auto-save if we're in REPL mode (user can explicitly save)
+    if _session and _session.is_open and _session.is_modified:
         if not _repl_mode:
             try:
                 _session.save_project()
-                click.echo(f"Auto-saved to: {_session.project_path}")
+                if not _json_output:
+                    click.echo(f"Auto-saved to: {_session.project_path}", err=True)
             except Exception as e:
                 click.echo(f"Auto-save failed: {e}", err=True)
 
@@ -349,19 +343,20 @@ def timeline_remove_track(track_index):
 
 
 @timeline.command("add-clip")
-@click.argument("resource")
+@click.argument("clip_id")
 @click.option("--track", "track_index", required=True, type=int, help="Track index")
 @click.option("--in", "in_point", default=None, help="In point (timecode)")
 @click.option("--out", "out_point", default=None, help="Out point (timecode)")
 @click.option("--position", default=None, type=int, help="Insert position (clip index)")
+@click.option("--at", "at_time", default=None, help="Absolute timeline start time")
 @click.option("--caption", default=None, help="Display name")
 @handle_error
-def timeline_add_clip(resource, track_index, in_point, out_point, position, caption):
-    """Add a media clip to a track."""
+def timeline_add_clip(clip_id, track_index, in_point, out_point, position, at_time, caption):
+    """Add an imported clip to a track by clip_id."""
     session = get_session()
-    result = tl_mod.add_clip(session, resource, track_index,
-                             in_point, out_point, position, caption)
-    output(result, f"Added clip to track {track_index}")
+    result = tl_mod.add_clip(session, clip_id, track_index,
+                             in_point, out_point, position, at_time, caption)
+    output(result, f"Added clip {clip_id} to track {track_index}")
 
 
 @timeline.command("remove-clip")
@@ -570,6 +565,60 @@ def filter_list(track_index, clip_index):
     output(result, f"Filters on {target}:")
 
 
+@filter_group.command("volume-envelope")
+@click.option("--track", "track_index", default=None, type=int,
+              help="Track index (omit for global)")
+@click.option("--clip", "clip_index", default=None, type=int,
+              help="Clip index on track (omit for track-level)")
+@click.option("--point", "points", multiple=True, required=True,
+              help="Time=level pair, e.g. 00:00:00.000=1.0")
+@handle_error
+def filter_volume_envelope(track_index, clip_index, points):
+    """Create or replace a keyframed volume envelope on a track or clip."""
+    session = get_session()
+    parsed = []
+    for p in points:
+        timecode, level = p.split("=", 1)
+        parsed.append((timecode, level))
+    result = filt_mod.set_volume_envelope(
+        session, parsed, track_index=track_index, clip_index=clip_index)
+    output(result, "Set volume envelope")
+
+
+@filter_group.command("duck")
+@click.option("--track", "track_index", default=None, type=int,
+              help="Track index (omit for global)")
+@click.option("--clip", "clip_index", default=None, type=int,
+              help="Clip index on track (omit for track-level)")
+@click.option("--window", "windows", multiple=True, required=True,
+              help="Ducking window START..END")
+@click.option("--normal", "normal_level", default=1.0, show_default=True, type=float,
+              help="Normal volume level")
+@click.option("--duck", "duck_level", default=0.25, show_default=True, type=float,
+              help="Ducked volume level")
+@click.option("--attack", default="00:00:00.150", show_default=True,
+              help="Attack time (fade to duck)")
+@click.option("--release", default="00:00:00.250", show_default=True,
+              help="Release time (fade from duck)")
+@handle_error
+def filter_duck(track_index, clip_index, windows, normal_level, duck_level, attack, release):
+    """Apply a simple ducking envelope over one or more windows."""
+    session = get_session()
+    parsed = []
+    for window in windows:
+        if ".." not in window:
+            click.echo("Usage: duck --window START..END ...", err=True)
+            return
+        start_tc, end_tc = window.split("..", 1)
+        parsed.append((start_tc, end_tc))
+    result = filt_mod.duck_volume(
+        session, parsed,
+        track_index=track_index, clip_index=clip_index,
+        normal_level=normal_level, duck_level=duck_level,
+        attack=attack, release=release)
+    output(result, "Applied ducking envelope")
+
+
 # ============================================================================
 # Media commands
 # ============================================================================
@@ -605,6 +654,17 @@ def media_check():
     session = get_session()
     result = media_mod.check_media_files(session)
     output(result)
+
+
+@media.command("import")
+@click.argument("resource")
+@click.option("--caption", default=None, help="Display caption")
+@handle_error
+def media_import(resource, caption):
+    """Import a media file into the project bin."""
+    session = get_session()
+    result = media_mod.import_media(session, resource, caption)
+    output(result, f"Imported {os.path.basename(resource)} as {result['clip_id']}")
 
 
 @media.command("thumbnail")
@@ -694,15 +754,16 @@ def transition_info(transition_name):
 
 @transition_group.command("add")
 @click.argument("transition_name")
-@click.option("--track-a", required=True, type=int, help="Source track (background)")
-@click.option("--track-b", required=True, type=int, help="Destination track (foreground)")
-@click.option("--in", "in_point", default=None, help="Start timecode")
-@click.option("--out", "out_point", default=None, help="End timecode")
+@click.option("--track", "track_index", required=True, type=int, help="Track index")
+@click.option("--clip", "clip_a_index", required=True, type=int,
+              help="Index of first clip (transition is between clip and clip+1)")
+@click.option("--duration", "duration_frames", default=14, type=int,
+              help="Transition duration in frames (default: 14)")
 @click.option("--param", "params", multiple=True,
               help="Parameter as name=value (repeatable)")
 @handle_error
-def transition_add(transition_name, track_a, track_b, in_point, out_point, params):
-    """Add a transition between two tracks."""
+def transition_add(transition_name, track_index, clip_a_index, duration_frames, params):
+    """Add a transition between two adjacent clips on a track."""
     session = get_session()
     param_dict = {}
     for p in params:
@@ -711,9 +772,11 @@ def transition_add(transition_name, track_a, track_b, in_point, out_point, param
         key, val = p.split("=", 1)
         param_dict[key] = val
 
-    result = trans_mod.add_transition(session, transition_name, track_a, track_b,
-                                      in_point, out_point,
-                                      param_dict if param_dict else None)
+    result = trans_mod.add_transition(
+        session, transition_name, track_index, clip_a_index,
+        duration_frames,
+        param_dict if param_dict else None
+    )
     output(result, f"Added transition '{transition_name}'")
 
 
@@ -889,6 +952,7 @@ def repl(project_path):
     _repl_mode = True
 
     s = get_session()
+
     if project_path:
         s.open_project(project_path)
 
@@ -898,7 +962,7 @@ def repl(project_path):
 
     if project_path:
         skin.info(f"Opened: {project_path}")
-        print()
+    print()
 
     try:
         _run_repl(s, skin)
@@ -925,7 +989,8 @@ def _run_repl(s: Session, skin):
         "tracks": "List timeline tracks",
         "show": "Show timeline overview",
         "add-track <video|audio> [name]": "Add a track",
-        "add-clip <file> <track> [in] [out]": "Add clip to track",
+        "add-clip <clip_id> <track> [in] [out] [--at time]": "Add imported clip to track",
+        "media import <file> [--caption name]": "Import media file into project bin",
         "clips <track>": "List clips on a track",
         "remove-clip <track> <clip>": "Remove a clip",
         "trim <track> <clip> [--in tc] [--out tc]": "Trim a clip",
@@ -934,6 +999,8 @@ def _run_repl(s: Session, skin):
         "filters [--track n] [--clip n]": "List filters on target",
         "remove-filter <idx> [--track n] [--clip n]": "Remove a filter",
         "set-filter <idx> <param> <value> [--track n] [--clip n]": "Set filter param",
+        "volume-envelope [--track n] [--clip n] TIME=LEVEL ...": "Set a keyframed volume envelope",
+        "duck [--track n] [--clip n] START:END ...": "Apply ducking across timeline windows",
         "filter-info <name>": "Show filter details",
         "list-filters [video|audio]": "List available filters",
         "media": "List media in project",
@@ -964,7 +1031,11 @@ def _run_repl(s: Session, skin):
         if not line:
             continue
 
-        parts = line.split()
+        try:
+            parts = shlex.split(line)
+        except ValueError:
+            click.echo("Error: unmatched quotes")
+            continue
         cmd = parts[0].lower()
         args = parts[1:]
 
@@ -1026,14 +1097,22 @@ def _run_repl(s: Session, skin):
 
             elif cmd == "add-clip":
                 if len(args) < 2:
-                    click.echo("Usage: add-clip <file> <track> [in] [out]")
+                    click.echo("Usage: add-clip <clip_id> <track> [in] [out] [--at time]")
                     continue
-                resource = args[0]
+                clip_id = args[0]
                 track = int(args[1])
-                in_pt = args[2] if len(args) > 2 else None
-                out_pt = args[3] if len(args) > 3 else None
-                result = tl_mod.add_clip(s, resource, track, in_pt, out_pt)
-                output(result, f"Added clip to track {track}")
+                in_pt = args[2] if len(args) > 2 and not args[2].startswith("--") else None
+                out_pt = args[3] if len(args) > 3 and not args[3].startswith("--") else None
+                at_time = None
+                i = 2
+                while i < len(args):
+                    if args[i] == "--at" and i + 1 < len(args):
+                        at_time = args[i + 1]
+                        i += 2
+                    else:
+                        i += 1
+                result = tl_mod.add_clip(s, clip_id, track, in_pt, out_pt, at_time=at_time)
+                output(result, f"Added clip {clip_id} to track {track}")
 
             elif cmd == "clips":
                 if not args:
@@ -1162,6 +1241,77 @@ def _run_repl(s: Session, skin):
                                                     track_idx, clip_idx)
                 output(result)
 
+            elif cmd == "volume-envelope":
+                track_idx = None
+                clip_idx = None
+                points = []
+                i = 0
+                while i < len(args):
+                    if args[i] == "--track" and i + 1 < len(args):
+                        track_idx = int(args[i + 1])
+                        i += 2
+                    elif args[i] == "--clip" and i + 1 < len(args):
+                        clip_idx = int(args[i + 1])
+                        i += 2
+                    elif "=" in args[i]:
+                        timecode, level = args[i].split("=", 1)
+                        points.append((timecode, level))
+                        i += 1
+                    else:
+                        click.echo("Usage: volume-envelope [--track n] [--clip n] TIME=LEVEL ...")
+                        break
+                else:
+                    if not points:
+                        click.echo("Usage: volume-envelope [--track n] [--clip n] TIME=LEVEL ...")
+                        continue
+                    result = filt_mod.set_volume_envelope(
+                        s, points, track_index=track_idx, clip_index=clip_idx)
+                    output(result, "Set volume envelope")
+
+            elif cmd == "duck":
+                track_idx = None
+                clip_idx = None
+                windows = []
+                normal_level = 1.0
+                duck_level = 0.25
+                attack = "00:00:00.150"
+                release = "00:00:00.250"
+                i = 0
+                while i < len(args):
+                    if args[i] == "--track" and i + 1 < len(args):
+                        track_idx = int(args[i + 1])
+                        i += 2
+                    elif args[i] == "--clip" and i + 1 < len(args):
+                        clip_idx = int(args[i + 1])
+                        i += 2
+                    elif args[i] == "--normal" and i + 1 < len(args):
+                        normal_level = float(args[i + 1])
+                        i += 2
+                    elif args[i] == "--duck" and i + 1 < len(args):
+                        duck_level = float(args[i + 1])
+                        i += 2
+                    elif args[i] == "--attack" and i + 1 < len(args):
+                        attack = args[i + 1]
+                        i += 2
+                    elif args[i] == "--release" and i + 1 < len(args):
+                        release = args[i + 1]
+                        i += 2
+                    elif ".." in args[i]:
+                        start_tc, end_tc = args[i].split("..", 1)
+                        windows.append((start_tc, end_tc))
+                        i += 1
+                    else:
+                        i += 1
+                if not windows:
+                    click.echo("Usage: duck [--track n] [--clip n] START..END ...")
+                    continue
+                result = filt_mod.duck_volume(
+                    s, windows,
+                    track_index=track_idx, clip_index=clip_idx,
+                    normal_level=normal_level, duck_level=duck_level,
+                    attack=attack, release=release)
+                output(result, "Applied ducking envelope")
+
             elif cmd == "filter-info":
                 if not args:
                     click.echo("Usage: filter-info <name>")
@@ -1173,6 +1323,21 @@ def _run_repl(s: Session, skin):
                 cat = args[0] if args else None
                 result = filt_mod.list_available_filters(cat)
                 output(result)
+
+            elif cmd == "media" and args and args[0] == "import":
+                if len(args) < 2:
+                    click.echo("Usage: media import <file> [--caption name]")
+                    continue
+                caption = None
+                i = 2
+                while i < len(args):
+                    if args[i] == "--caption" and i + 1 < len(args):
+                        caption = args[i + 1]
+                        i += 2
+                    else:
+                        i += 1
+                result = media_mod.import_media(s, args[1], caption)
+                output(result, f"Imported {os.path.basename(args[1])} as {result['clip_id']}")
 
             elif cmd == "media":
                 result = media_mod.list_media(s)
