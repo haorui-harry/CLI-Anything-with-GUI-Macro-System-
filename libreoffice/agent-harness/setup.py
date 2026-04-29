@@ -16,7 +16,7 @@ setup(
     version="1.0.0",
     author="cli-anything contributors",
     author_email="",
-    description="CLI harness for LibreOffice - Create and manipulate ODF documents, export to PDF/DOCX/XLSX/PPTX via LibreOffice headless",
+    description="CLI harness for LibreOffice - import, create, edit, and export ODF/Office documents via LibreOffice headless",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/HKUDS/CLI-Anything",
