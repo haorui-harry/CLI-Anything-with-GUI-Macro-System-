@@ -1029,6 +1029,25 @@
           "url": "https://github.com/LI-Meng420"
         }
       ]
+    },
+    {
+      "name": "inkstitch",
+      "display_name": "Ink/Stitch",
+      "version": "0.1.0",
+      "description": "Machine-embroidery digitization — set stitch params, validate, preview, and export to DST/PES/JEF/VP3 via Ink/Stitch",
+      "requires": "Ink/Stitch extension installed (https://inkstitch.org/docs/install/)",
+      "homepage": "https://inkstitch.org",
+      "source_url": "https://github.com/bobbymarko/cli-anything-inkstitch",
+      "install_cmd": "pip install cli-anything-inkstitch",
+      "entry_point": "cli-anything-inkstitch",
+      "skill_md": "https://github.com/bobbymarko/cli-anything-inkstitch/blob/main/skills/cli-anything-inkstitch/SKILL.md",
+      "category": "design",
+      "contributors": [
+        {
+          "name": "bobbymarko",
+          "url": "https://github.com/bobbymarko"
+        }
+      ]
     }
   ]
 }
