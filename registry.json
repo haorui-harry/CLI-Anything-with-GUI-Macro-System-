@@ -841,6 +841,25 @@
       ]
     },
     {
+      "name": "sbox",
+      "display_name": "s&box",
+      "version": "1.0.0",
+      "description": "Game engine project management for s&box (Source 2): scenes, prefabs, materials, sounds, codegen, asset graph, project validation",
+      "requires": "s&box installed via Steam (sbox.game)",
+      "homepage": "https://sbox.game",
+      "source_url": null,
+      "install_cmd": "pip install git+https://github.com/HKUDS/CLI-Anything.git#subdirectory=sbox/agent-harness",
+      "entry_point": "cli-anything-sbox",
+      "skill_md": "skills/cli-anything-sbox/SKILL.md",
+      "category": "gamedev",
+      "contributors": [
+        {
+          "name": "KarandeepSWranch",
+          "url": "https://github.com/KarandeepSWranch"
+        }
+      ]
+    },
+    {
       "name": "dify-workflow",
       "display_name": "Dify Workflow",
       "version": "0.1.0",
@@ -970,6 +989,63 @@
         {
           "name": "haorui-harry",
           "url": "https://github.com/haorui-harry"
+        }
+      ]
+    },
+    {
+      "name": "quietshrink",
+      "display_name": "QuietShrink",
+      "version": "1.0.0",
+      "description": "Compress macOS screen recordings on Apple Silicon — 70-90% smaller files at visually lossless quality, hardware-encoded, computer stays silent",
+      "requires": "ffmpeg with hevc_videotoolbox + the quietshrink bash CLI (curl -fsSL https://raw.githubusercontent.com/achiya-automation/quietshrink/main/install.sh | bash)",
+      "homepage": "https://github.com/achiya-automation/quietshrink",
+      "source_url": null,
+      "install_cmd": "pip install git+https://github.com/HKUDS/CLI-Anything.git#subdirectory=quietshrink/agent-harness",
+      "entry_point": "cli-anything-quietshrink",
+      "skill_md": "skills/cli-anything-quietshrink/SKILL.md",
+      "category": "video",
+      "contributors": [
+        {
+          "name": "achiya-automation",
+          "url": "https://github.com/achiya-automation"
+        }
+      ]
+    },
+    {
+      "name": "stata",
+      "display_name": "Stata",
+      "version": "0.1.0",
+      "description": "Run Stata do-files, batch jobs, and reproducible econometric projects from the terminal with JSON output, log parsing, project scaffolding, and security guard",
+      "requires": "Licensed Stata installation (StataMP/SE/BE 15+), Python 3.10+",
+      "homepage": "https://www.stata.com",
+      "source_url": "https://github.com/LI-Meng420/stata-cli",
+      "install_cmd": "pip install git+https://github.com/LI-Meng420/stata-cli.git",
+      "entry_point": "cli-anything-stata",
+      "skill_md": "https://raw.githubusercontent.com/LI-Meng420/stata-cli/main/cli_anything/stata/skills/SKILL.md",
+      "category": "science",
+      "contributors": [
+        {
+          "name": "LI-Meng420",
+          "url": "https://github.com/LI-Meng420"
+        }
+      ]
+    },
+    {
+      "name": "inkstitch",
+      "display_name": "Ink/Stitch",
+      "version": "0.1.1",
+      "description": "Machine-embroidery digitization — set stitch params, validate, preview, and export to DST/PES/JEF/VP3 via Ink/Stitch",
+      "requires": "Ink/Stitch extension installed (https://inkstitch.org/docs/install/)",
+      "homepage": "https://inkstitch.org",
+      "source_url": "https://github.com/bobbymarko/cli-anything-inkstitch",
+      "install_cmd": "pip install cli-anything-inkstitch",
+      "entry_point": "cli-anything-inkstitch",
+      "skill_md": "https://github.com/bobbymarko/cli-anything-inkstitch/blob/main/skills/cli-anything-inkstitch/SKILL.md",
+      "category": "design",
+      "contributors": [
+        {
+          "name": "bobbymarko",
+          "url": "https://github.com/bobbymarko"
         }
       ]
     }

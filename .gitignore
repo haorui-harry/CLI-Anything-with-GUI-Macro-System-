@@ -23,6 +23,8 @@
 /.github/*
 !/.github/workflows/
 !/.github/scripts/
+!/.github/CODEOWNERS
+!/.github/labeler.yml
 !/.github/PULL_REQUEST_TEMPLATE.md
 !/.github/ISSUE_TEMPLATE/
 
@@ -238,6 +240,7 @@
 /macrocli/agent-harness/cli_anything/macrocli/macro_definitions/demo/flameshot*
 /macrocli/agent-harness/cli_anything/macrocli/macro_definitions/demo/kolourpaint*
 /macrocli/agent-harness/cli_anything/macrocli/macro_definitions/demo/snapshots/
+
 
 # Step 7: Ignore build artifacts within allowed dirs
 **/__pycache__/

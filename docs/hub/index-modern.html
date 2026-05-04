@@ -1537,20 +1537,21 @@
 
     .footer-stats {
       display: flex;
-      justify-content: center;
-      width: min(860px, 100%);
+      justify-content: flex-start;
+      width: 100%;
       margin: 0 auto;
-      padding: 0.5rem 0.72rem;
-      border-radius: var(--radius-md);
-      background: rgba(255,255,255,0.03);
+      padding: 0.1rem 0 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
     }
 
     .footer-analytics-board {
       display: flex;
-      align-items: center;
-      justify-content: center;
+      align-items: baseline;
+      justify-content: flex-start;
       flex-wrap: wrap;
-      gap: 0.32rem 0.7rem;
+      gap: 0.24rem 0.72rem;
       min-width: 0;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
       font-size: 0.74rem;
@@ -1575,10 +1576,11 @@
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--text-tertiary);
+      margin-right: 0.05rem;
     }
 
     .analytics-row {
-      gap: 0.42rem;
+      gap: 0.38rem;
     }
 
     .analytics-key {
@@ -1622,9 +1624,10 @@
 
     .analytics-divider {
       width: 1px;
-      height: 0.9rem;
+      height: 0.78rem;
       background: var(--border);
       flex: 0 0 auto;
+      transform: translateY(0.12rem);
     }
 
     .sr-only {
@@ -2083,11 +2086,9 @@
       <div class="footer-stats">
         <div class="footer-analytics-board" aria-label="Traffic snapshot">
           <span class="analytics-kicker">Traffic</span>
-          <span class="analytics-key">Human/Agent</span>
           <span class="analytics-row">
-            <span class="analytics-title">Page</span>
-            <strong id="stat-total" class="metric-value">...</strong>
-            <span class="metric-pair"><strong id="stat-human" class="human-value">...</strong>/<strong id="stat-agent" class="agent-value">...</strong></span>
+            <span class="analytics-title">Web</span>
+            <strong id="stat-web-unique" class="metric-value">...</strong>
           </span>
           <span class="analytics-divider" aria-hidden="true"></span>
           <span class="analytics-row">
@@ -2605,12 +2606,6 @@
       const ANALYTICS_PROVIDER = 'posthog';
       const ANALYTICS_SITE = 'clianything.cc';
       const COUNTED_HOSTS = new Set(['clianything.cc', 'www.clianything.cc']);
-      // Fixed Umami baseline from remote main. Runtime PostHog counts are
-      // queried live and added to this.
-      const UMAMI_BASELINE_STATS = {
-        human: 7689, agent: 13434,
-        cli_hub_human: 3237, cli_hub_agent: 13124,
-      };
       const ANALYTICS_TEST_RUN = new URLSearchParams(location.search).get('analytics_test_run') || '';
       const POSTHOG_CONFIG = {
         projectToken: 'phc_ovP8d5bmjpn8YZnTo7pb6rE3TikcAMgmNVt75o3Ywejz',
@@ -2678,9 +2673,7 @@
           if (!n) return '0K';
           return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
         };
-        document.getElementById('stat-total').textContent = formatK(stats.total);
-        document.getElementById('stat-human').textContent = formatK(stats.human);
-        document.getElementById('stat-agent').textContent = formatK(stats.agent);
+        document.getElementById('stat-web-unique').textContent = formatK(stats.web_unique_visitors);
         document.getElementById('stat-cli-total').textContent = formatK(stats.cli_hub_total);
         document.getElementById('stat-cli-human').textContent = formatK(stats.cli_hub_human);
         document.getElementById('stat-cli-agent').textContent = formatK(stats.cli_hub_agent);
@@ -2886,19 +2879,23 @@
 
       // ── Live analytics via Cloudflare Worker proxy ──
       // Runtime stats are fetched once per page load and rendered as compact
-      // site page-view and CLI-Hub usage counters split by human/agent.
+      // Cloudflare unique visitor and CLI-Hub usage counters.
       const ANALYTICS_PROXY_URL = 'https://analytics.clianything.cc/';
       const ZERO_STATS = {
-        human: 0, agent: 0,
+        web_unique_visitors: 0,
+        cli_hub_total: 0,
         cli_hub_human: 0, cli_hub_agent: 0,
       };
 
       function normalizeStats(stats) {
-        const out = {};
-        for (const key of Object.keys(ZERO_STATS)) {
-          out[key] = Number(stats && stats[key]) || 0;
-        }
-        return out;
+        const cliHubHuman = Number(stats && stats.cli_hub_human) || 0;
+        const cliHubAgent = Number(stats && stats.cli_hub_agent) || 0;
+        return {
+          web_unique_visitors: Number(stats && (stats.web_unique_visitors ?? stats.total)) || 0,
+          cli_hub_total: Number(stats && stats.cli_hub_total) || cliHubHuman + cliHubAgent,
+          cli_hub_human: cliHubHuman,
+          cli_hub_agent: cliHubAgent,
+        };
       }
 
       async function fetchWorkerStats() {
@@ -2908,54 +2905,8 @@
         return normalizeStats(data.stats || data);
       }
 
-      async function fetchPosthogTotals() {
-        const hogql = (
-          "select " +
-          "countIf(event = 'visit-human' and properties.source = 'web' and properties.site = 'clianything.cc') as human, " +
-          "countIf(event = 'visit-agent' and properties.source = 'web' and properties.site = 'clianything.cc') as agent, " +
-          "countIf(event = 'cli-hub call' and properties.source = 'cli' and properties.channel = 'cli-hub' and properties.is_agent = false) as cli_hub_human, " +
-          "countIf(event = 'cli-hub call' and properties.source = 'cli' and properties.channel = 'cli-hub' and properties.is_agent = true) as cli_hub_agent " +
-          "from events"
-        );
-        const response = await fetch(ANALYTICS_PROXY_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: { kind: 'HogQLQuery', query: hogql } }),
-        });
-        if (!response.ok) throw new Error('posthog query http ' + response.status);
-        const data = await response.json();
-        const row = (data.results && data.results[0]) || [0, 0, 0, 0];
-        return {
-          human: Number(row[0]) || 0,
-          agent: Number(row[1]) || 0,
-          cli_hub_human: Number(row[2]) || 0,
-          cli_hub_agent: Number(row[3]) || 0,
-        };
-      }
-
       async function fetchVisitorStats() {
-        try {
-          return await fetchWorkerStats();
-        } catch {
-          const posthog = await fetchPosthogTotals();
-          return sumStats(UMAMI_BASELINE_STATS, posthog);
-        }
-      }
-
-      function sumStats(a, b) {
-        const out = {};
-        for (const key of Object.keys(ZERO_STATS)) out[key] = (a[key] || 0) + (b[key] || 0);
-        return out;
-      }
-
-      function withDerivedTotals(s) {
-        // cli-hub call is emitted once per invocation, so action events like
-        // install/launch must not be added here or usage would be double-counted.
-        return {
-          ...s,
-          total: s.human + s.agent,
-          cli_hub_total: s.cli_hub_human + s.cli_hub_agent,
-        };
+        return fetchWorkerStats();
       }
 
       function hasAnyStats(s) {
@@ -2965,7 +2916,7 @@
       async function refreshVisitorStats() {
         const stats = await fetchVisitorStats();
         if (!hasAnyStats(stats)) return false;
-        applyVisitorStats(withDerivedTotals(stats));
+        applyVisitorStats(stats);
         return true;
       }
 
